@@ -1,0 +1,17 @@
+{
+    "server_addr": "0.0.0.0:8081",
+    "paths": [
+        {
+            "starts_with": "/api/v1",
+            "forward_to_port": 8000
+        },
+        {
+            "starts_with": "/admin",
+            "forward_to_port": 8080
+        },
+        {
+            "starts_with": "/static",
+            "forward_to_port": 8888
+        }
+    ]
+}
