@@ -11,10 +11,6 @@
             "forward_to_port": 8080
         },
         {
-            "starts_with": "/static",
-            "forward_to_port": 8888
-        },
-        {
             "starts_with": "",
             "forward_to_port": 3000
         }

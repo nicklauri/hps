@@ -1,4 +1,4 @@
-use crate::client::Bridge;
+use crate::client::{self, Bridge};
 use crate::config::HpsConfig;
 use anyhow::{anyhow, bail, Context, Result};
 use std::{future::Future, net::SocketAddr, str, sync::Arc};
@@ -11,19 +11,24 @@ use tracing::{error, info, warn};
 pub const DEFAULT_CLIENT_READ_BUFF: usize = 1024;
 
 pub async fn create_server(config: Arc<HpsConfig>) -> Result<TcpListener> {
-    let server = TcpListener::bind(&config.server_addr).await?;
+    let server_addr = format!("{}:{}", config.server_addr, config.server_port);
+
+    let server = TcpListener::bind(&server_addr)
+        .await
+        .with_context(|| format!("bind server failed: server_addr={}", server_addr))?;
 
     Ok(server)
 }
 
 pub async fn handle_client(
     config: Arc<HpsConfig>,
-    mut client: TcpStream,
+    client: TcpStream,
     addr: SocketAddr,
 ) -> Result<()> {
-    // let bridge = Bridge::new()
-
-    Ok(())
+    match client::build_bridge(config, client, addr).await? {
+        Some(bridge) => bridge.run().await,
+        None => Ok(()),
+    }
 }
 
 pub async fn handle_error(future: impl Future<Output = Result<()>>) {
