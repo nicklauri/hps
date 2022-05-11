@@ -19,7 +19,7 @@ mod server;
 pub async fn run() -> Result<()> {
     let config = Arc::new(config::parse_config_from_args().await?);
 
-    info!("hps_config = {config:#?}");
+    // info!("hps_config = {config:#?}");
 
     let mut server = server::create_server(config.clone()).await?;
 

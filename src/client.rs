@@ -9,7 +9,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{self, AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
     select,
 };
@@ -22,11 +22,10 @@ pub async fn build_bridge(
 ) -> Result<Option<Bridge>> {
     let mut buff = [0u8; config::DEFAULT_BUFFER_SIZE];
     let mut bytes_read = 0;
-    let mut request_bytes = Vec::new();
 
     loop {
         let amount = client
-            .read(&mut buff)
+            .read(&mut buff[bytes_read..])
             .await
             .context("initial read for client failed")?;
 
@@ -36,11 +35,10 @@ pub async fn build_bridge(
             bail!("initial read: client {client_addr} send zero bytes!");
         }
 
-        request_bytes.extend_from_slice(&buff[..amount]);
+        let req = &buff[..amount];
 
-        if let Some(matcher_idx) = match_from_bytes(&config, &request_bytes) {
-            let bridge =
-                Bridge::new(config, client, client_addr, matcher_idx, &request_bytes).await?;
+        if let Some(matcher_idx) = match_from_bytes(&config, req) {
+            let bridge = Bridge::new(config, client, client_addr, matcher_idx, req).await?;
 
             return Ok(Some(bridge));
         }
@@ -60,7 +58,7 @@ pub async fn build_bridge(
 fn match_from_bytes<'a>(config: &HpsConfig, src: &'a [u8]) -> Option<usize> {
     if src.contains(&b'\n') {
         let path = src.split(|&ch| ch == b' ').nth(1)?;
-        let path = std::str::from_utf8(src).ok()?;
+        let path = std::str::from_utf8(path).ok()?;
 
         config.match_path(path)
     } else {
@@ -74,8 +72,8 @@ pub struct Bridge {
     client: TcpStream,
     server: TcpStream,
     client_addr: SocketAddr,
-    client_read: usize,
-    server_read: usize,
+    server_addr: String,
+    client_read: u64,
     buffer: Vec<u8>,
     matcher_idx: usize,
 }
@@ -92,45 +90,37 @@ impl Bridge {
 
         let mut server = TcpStream::connect(server_addr).await?;
 
-        info!("established connection: client={client_addr} <=> server={server_addr}");
+        if config.verbose {
+            info!("established connection: client={client_addr} <=> server={server_addr}");
+        }
 
         server.write_all(request_bytes).await?;
 
         let buffer_size = config.buffer_size;
 
         Ok(Self {
-            config,
             client,
             server,
             client_addr,
-            client_read: request_bytes.len(),
-            server_read: 0,
+            server_addr: server_addr.to_string(),
+            client_read: request_bytes.len() as _,
             buffer: vec![0u8; buffer_size],
             matcher_idx,
+            config,
         })
     }
 
-    pub fn bytes_read(&self) -> usize {
-        self.client_read
-    }
-
-    pub fn bytes_write(&self) -> usize {
-        self.server_read
-    }
-
     pub async fn run(mut self) -> Result<()> {
-        select! {
-            _ = self.client.readable() => {
-                let amount = self.client.read(&mut self.buffer).await?;
+        let (client_read, server_read) =
+            io::copy_bidirectional(&mut self.client, &mut self.server).await?;
 
-                self.server.write_all(&self.buffer[..amount]).await?;
-            }
-            _ = self.server.readable() => {
-                let amount = self.server.read(&mut self.buffer).await?;
-
-                self.client.write_all(&self.buffer[..amount]).await?;
-            }
-        }
+        info!(
+            "client={}; server={}: read={} bytes; write={} bytes",
+            self.client_addr,
+            self.server_addr,
+            client_read + self.client_read,
+            server_read
+        );
 
         Ok(())
     }

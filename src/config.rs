@@ -13,6 +13,9 @@ pub struct HpsConfig {
     pub server_port: u16,
     pub paths: Vec<Matcher>,
 
+    #[serde(default)]
+    pub verbose: bool,
+
     #[serde(default = "HpsConfig::get_default_bridge_buffer_size")]
     pub buffer_size: usize,
 }

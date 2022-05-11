@@ -31,7 +31,7 @@ pub async fn handle_client(
     }
 }
 
-pub async fn handle_error(future: impl Future<Output = Result<()>>) {
+pub async fn handle_error(future: impl Future<Output = Result<()>>, client_addr: SocketAddr) {
     if let Err(err) = future.await {
         error!("handle client error: {err}");
     }
@@ -66,11 +66,13 @@ pub async fn run_server(server: &mut TcpListener, config: Arc<HpsConfig>) -> Res
             }
         };
 
-        info!("got request from: {}", client_addr);
+        if config.verbose {
+            info!("got request from: {}", client_addr);
+        }
 
         let task = handle_client(config.clone(), client, client_addr);
 
-        tokio::spawn(handle_error(task));
+        tokio::spawn(handle_error(task, client_addr));
     }
 
     Ok(())
