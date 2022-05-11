@@ -1,29 +1,35 @@
 #![allow(warnings)]
-use std::{env, net::SocketAddr};
+use std::{env, net::SocketAddr, sync::Arc};
 
 use anyhow::{anyhow, bail, Result};
 use config::HpsConfig;
 use httparse;
-use tokio::{self, fs, net::{TcpListener, TcpStream}};
-use tracing::{info, warn, error};
-use tracing_subscriber;
-use serde_json;
 use serde::{Deserialize, Serialize};
+use serde_json;
+use tokio::{
+    self, fs,
+    net::{TcpListener, TcpStream},
+};
+use tracing::{error, info, warn};
+use tracing_subscriber;
 
 mod client;
 mod config;
 mod server;
 
 pub async fn run() -> Result<()> {
-    let config = config::parse_config_from_args().await?;
+    let config = Arc::new(config::parse_config_from_args().await?);
 
     info!(hps_config = ?config, "run hps with config");
 
-    let mut server = server::create_server(&config).await?;
+    let mut server = server::create_server(config.clone()).await?;
 
-    info!("server started at: {} . Press Ctrl-C to stop.", config.server_addr);
+    info!(
+        "server started at: {} . Press Ctrl-C to stop.",
+        &config.server_addr
+    );
 
-    server::run_server(&mut server).await?;
+    server::run_server(&mut server, config).await?;
 
     Ok(())
 }
