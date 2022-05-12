@@ -3,7 +3,7 @@
 // establish bridge: client <-> hps <-> server
 
 use crate::{
-    config::{self, HpsConfig},
+    config::{self, HpsConfig, CONFIG},
     server,
 };
 use anyhow::{bail, Context, Result};
@@ -16,7 +16,6 @@ use tokio::{
 use tracing::{info, warn};
 
 pub async fn build_bridge(
-    config: Arc<HpsConfig>,
     mut client: TcpStream,
     client_addr: SocketAddr,
 ) -> Result<Option<Bridge>> {
@@ -39,20 +38,20 @@ pub async fn build_bridge(
         let req = &buff[..amount];
 
         let path = get_path(req);
-        let matched_matcher_idx = path.and_then(|p| config.match_path(p));
+        let matched_matcher_idx = path.and_then(|p| CONFIG.match_path(p));
 
         if let Some(matcher_idx) = matched_matcher_idx {
-            let server_addr = config.paths[matcher_idx].server_addr();
+            let server_addr = CONFIG.paths[matcher_idx].server_addr();
             let path = path.unwrap();
-            let matcher = config.paths[matcher_idx].matcher();
+            let matcher = CONFIG.paths[matcher_idx].matcher();
             info!("client={client_addr}, server={server_addr}: matched path {path:?} against {matcher:?}");
 
-            let bridge = Bridge::new(config, client, client_addr, matcher_idx, req).await?;
+            let bridge = Bridge::new(client, client_addr, matcher_idx, req).await?;
 
             return Ok(Some(bridge));
         } else if amount == 0 || path.is_some() {
             // request ended but no path matched, response with bad request.
-            if config.verbose {
+            if CONFIG.verbose {
                 warn!("client={client_addr}: mismatched path {path:?}");
             }
 
@@ -77,7 +76,6 @@ fn get_path(src: &[u8]) -> Option<&str> {
 
 #[derive(Debug)]
 pub struct Bridge {
-    config: Arc<HpsConfig>,
     client: TcpStream,
     server: TcpStream,
     client_addr: SocketAddr,
@@ -89,23 +87,22 @@ pub struct Bridge {
 
 impl Bridge {
     pub async fn new(
-        config: Arc<HpsConfig>,
         client: TcpStream,
         client_addr: SocketAddr,
         matcher_idx: usize,
         request_bytes: &[u8],
     ) -> Result<Self> {
-        let server_addr = config.paths[matcher_idx].server_addr();
+        let server_addr = CONFIG.paths[matcher_idx].server_addr();
 
         let mut server = TcpStream::connect(server_addr).await?;
 
-        if config.verbose {
+        if CONFIG.verbose {
             info!("established connection: client={client_addr} <=> server={server_addr}");
         }
 
         server.write_all(request_bytes).await?;
 
-        let buffer_size = config.buffer_size;
+        let buffer_size = CONFIG.buffer_size;
 
         Ok(Self {
             client,
@@ -115,7 +112,6 @@ impl Bridge {
             client_read: request_bytes.len() as _,
             buffer: vec![0u8; buffer_size],
             matcher_idx,
-            config,
         })
     }
 

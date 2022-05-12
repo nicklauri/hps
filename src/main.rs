@@ -12,25 +12,29 @@ use tokio::{
 use tracing::{error, info, warn};
 use tracing_subscriber;
 
-mod client;
+use crate::config::exit_if_err;
+use crate::config::CONFIG;
+
+mod adapter;
+#[macro_use]
 mod config;
 mod server;
 
-pub async fn run() -> Result<()> {
-    let config = Arc::new(config::parse_config_from_args().await?);
+mod client;
 
-    if config.verbose {
-        info!("hps_config = {config:#?}");
+pub async fn run() -> Result<()> {
+    if CONFIG.verbose {
+        info!("hps_config = {CONFIG:#?}");
     }
 
-    let mut server = server::create_server(config.clone()).await?;
+    let mut server = server::create_server().await?;
 
     info!(
         "server started at: {}:{}. Press Ctrl-C to stop.",
-        config.server_addr, config.server_port
+        CONFIG.server_addr, CONFIG.server_port
     );
 
-    server::run_server(&mut server, config).await?;
+    server::run_server(&mut server).await?;
 
     Ok(())
 }

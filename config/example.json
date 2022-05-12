@@ -5,11 +5,11 @@
     "paths": [
         {
             "starts_with": "/api/v1",
-            "forward_to_port": 8080
+            "server_port": 8080
         },
         {
             "starts_with": "/admin",
-            "forward_to_port": 5000
+            "server_port": 5000
         }
     ]
 }
