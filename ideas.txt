@@ -1,8 +1,8 @@
 
 - accept connections on port 80 (or something else)
 - read some bytes and use httparse to parse them. IF:
-    + path starts with "/identity-local"
-        => connect to localhost:5001
-        => write all read bytes
-        => select read-write to each other
-        => if nothing happends, close connection
+    + path starts with "/path-1"
+        => match and connect to server if server hasn't been started yet.
+        => write all to server
+        => read from correspondnig server and copy from server to client.
+        => wait from client and read from client, back to the first loop

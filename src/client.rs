@@ -13,7 +13,7 @@ use tokio::{
     net::TcpStream,
     select,
 };
-use tracing::info;
+use tracing::{info, warn};
 
 pub async fn build_bridge(
     config: Arc<HpsConfig>,
@@ -32,7 +32,8 @@ pub async fn build_bridge(
         if amount == 0 && bytes_read == 0 {
             client.shutdown().await?;
 
-            bail!("initial read: client {client_addr} send zero bytes!");
+            warn!("initial read: client {client_addr} send zero bytes!");
+            return Ok(None);
         }
 
         let req = &buff[..amount];
@@ -41,18 +42,20 @@ pub async fn build_bridge(
         let matched_matcher_idx = path.and_then(|p| config.match_path(p));
 
         if let Some(matcher_idx) = matched_matcher_idx {
-            if config.verbose {
-                let server_addr = config.paths[matcher_idx].server_addr();
-                let path = path.unwrap();
-                let matcher = config.paths[matcher_idx].matcher();
-                info!("client={client_addr}, server={server_addr}: matched path {path:?} against {matcher:?}");
-            }
+            let server_addr = config.paths[matcher_idx].server_addr();
+            let path = path.unwrap();
+            let matcher = config.paths[matcher_idx].matcher();
+            info!("client={client_addr}, server={server_addr}: matched path {path:?} against {matcher:?}");
 
             let bridge = Bridge::new(config, client, client_addr, matcher_idx, req).await?;
 
             return Ok(Some(bridge));
         } else if amount == 0 || path.is_some() {
             // request ended but no path matched, response with bad request.
+            if config.verbose {
+                warn!("client={client_addr}: mismatched path {path:?}");
+            }
+
             let response = server::create_bad_request_response();
             client.write_all(response.as_bytes()).await?;
             client.shutdown().await?;
