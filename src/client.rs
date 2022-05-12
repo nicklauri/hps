@@ -37,13 +37,21 @@ pub async fn build_bridge(
 
         let req = &buff[..amount];
 
-        if let Some(matcher_idx) = match_from_bytes(&config, req) {
+        let path = get_path(req);
+        let matched_matcher_idx = path.and_then(|p| config.match_path(p));
+
+        if let Some(matcher_idx) = matched_matcher_idx {
+            if config.verbose {
+                let server_addr = config.paths[matcher_idx].server_addr();
+                let path = path.unwrap();
+                let matcher = config.paths[matcher_idx].matcher();
+                info!("client={client_addr}, server={server_addr}: matched path {path:?} against {matcher:?}");
+            }
+
             let bridge = Bridge::new(config, client, client_addr, matcher_idx, req).await?;
 
             return Ok(Some(bridge));
-        }
-
-        if amount == 0 {
+        } else if amount == 0 || path.is_some() {
             // request ended but no path matched, response with bad request.
             let response = server::create_bad_request_response();
             client.write_all(response.as_bytes()).await?;
@@ -55,12 +63,10 @@ pub async fn build_bridge(
     Ok(None)
 }
 
-fn match_from_bytes<'a>(config: &HpsConfig, src: &'a [u8]) -> Option<usize> {
+fn get_path(src: &[u8]) -> Option<&str> {
     if src.contains(&b'\n') {
         let path = src.split(|&ch| ch == b' ').nth(1)?;
-        let path = std::str::from_utf8(path).ok()?;
-
-        config.match_path(path)
+        std::str::from_utf8(path).ok()
     } else {
         None
     }

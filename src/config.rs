@@ -66,6 +66,10 @@ impl Matcher {
     pub fn server_addr(&self) -> &str {
         &self.server_addr
     }
+
+    pub fn matcher(&self) -> &str {
+        &self.starts_with
+    }
 }
 
 pub async fn parse_config_from_args() -> Result<HpsConfig> {

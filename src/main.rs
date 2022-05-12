@@ -1,7 +1,7 @@
 #![allow(warnings)]
 use anyhow::{anyhow, bail, Result};
 use config::HpsConfig;
-use httparse;
+use once_cell;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::{env, net::SocketAddr, process, sync::Arc};
@@ -19,7 +19,9 @@ mod server;
 pub async fn run() -> Result<()> {
     let config = Arc::new(config::parse_config_from_args().await?);
 
-    // info!("hps_config = {config:#?}");
+    if config.verbose {
+        info!("hps_config = {config:#?}");
+    }
 
     let mut server = server::create_server(config.clone()).await?;
 

@@ -44,15 +44,15 @@ pub fn create_bad_request_response() -> String {
     server: hps\
     connection: closed\
     \n\n\
-    <!DOCTYPE>
-    <html>
-    <head>
-        <title>Bad request</title>
-    </head>
-    <body><pre>
-        Bad request!
-    </pre></body>
-    </html>"
+<!DOCTYPE>
+<html>
+<head>
+    <title>Bad request</title>
+</head>
+<body><pre>
+    Bad request!
+</pre></body>
+</html>"
     )
 }
 

@@ -1,6 +1,7 @@
 {
     "server_addr": "127.0.0.1",
     "server_port": 80,
+    "verbose": true,
     "paths": [
         {
             "starts_with": "/api/v1",
@@ -9,10 +10,6 @@
         {
             "starts_with": "/admin",
             "forward_to_port": 5000
-        },
-        {
-            "starts_with": "",
-            "forward_to_port": 8080
         }
     ]
 }
