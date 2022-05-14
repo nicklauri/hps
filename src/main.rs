@@ -12,7 +12,7 @@ mod utils;
 
 pub async fn run() -> Result<()> {
     if CONFIG.verbose {
-        info!("hps_config = {CONFIG:#?}");
+        info!("hps_config = {:#?}", &*CONFIG);
     }
 
     let mut server = server::create_server().await?;
