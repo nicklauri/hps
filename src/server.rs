@@ -1,14 +1,9 @@
-use crate::adapter::{self, Adapter};
-use crate::config::{HpsConfig, CONFIG};
-use anyhow::{anyhow, bail, Context, Result};
-use std::{future::Future, net::SocketAddr, str, sync::Arc};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
-};
-use tracing::{error, info, warn};
-
-pub const DEFAULT_CLIENT_READ_BUFF: usize = 1024;
+use crate::adapter::Adapter;
+use crate::config::CONFIG;
+use anyhow::{Context, Result};
+use std::{future::Future, net::SocketAddr};
+use tokio::net::{TcpListener, TcpStream};
+use tracing::{info, warn};
 
 pub async fn create_server() -> Result<TcpListener> {
     let server_addr = format!("{}:{}", CONFIG.server_addr, CONFIG.server_port);
@@ -24,12 +19,21 @@ pub async fn handle_client(client: TcpStream, addr: SocketAddr) -> Result<()> {
     Adapter::new(client, addr).run().await
 }
 
-pub async fn handle_error(future: impl Future<Output = Result<()>>, client_addr: SocketAddr) {
+pub async fn handle_error(future: impl Future<Output = Result<()>>, _client_addr: SocketAddr) {
     if let Err(err) = future.await {
-        error!("handle client error: {err}");
+        if CONFIG.verbose {
+            warn!("error: {err:?}");
+
+            err.chain().skip(1).for_each(|e| {
+                warn!("caused by: {e}");
+            });
+        } else {
+            warn!("{err}");
+        }
     }
 }
 
+#[allow(dead_code)]
 pub fn create_bad_request_response() -> String {
     format!(
         "\
@@ -54,7 +58,7 @@ pub async fn run_server(server: &mut TcpListener) -> Result<()> {
         let (client, client_addr) = match server.accept().await {
             Ok(client) => client,
             Err(err) => {
-                warn!("error");
+                warn!("{err:?}");
                 continue;
             }
         };
@@ -67,6 +71,4 @@ pub async fn run_server(server: &mut TcpListener) -> Result<()> {
 
         tokio::spawn(handle_error(task, client_addr));
     }
-
-    Ok(())
 }

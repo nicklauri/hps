@@ -6,3 +6,9 @@
         => write all to server
         => read from correspondnig server and copy from server to client.
         => wait from client and read from client, back to the first loop
+
+
+remove all "client={}" in adapter.
+use handle to format
+
+handle error with dedicated Error struct

@@ -1,9 +1,10 @@
-use anyhow::{anyhow, bail, Error, Result};
+use crate::utils;
+use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::env;
-use tokio::fs;
+use tokio::net::TcpStream;
 use tracing::error;
 
 pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 8;
@@ -26,13 +27,11 @@ pub struct HpsConfig {
 
 impl HpsConfig {
     pub fn new() -> Self {
-        let config_file_path = exit_if_err!(env::args()
-            .nth(1)
-            .ok_or_else(|| anyhow!("no config file provided.")));
+        let config_file_path = exit_if_err!(env::args().nth(1).ok_or_else(|| anyhow!("no config file provided.")));
 
         let config_file_content = match std::fs::read_to_string(&config_file_path) {
             Ok(content) => content,
-            Err(err) => {
+            Err(_) => {
                 error!(
                     "parse_config_from_args: can't read content from path: {:?}",
                     config_file_path
@@ -46,8 +45,8 @@ impl HpsConfig {
         hps_config.format_server_addr()
     }
 
-    pub fn match_path(&self, path: &str) -> Option<usize> {
-        self.paths.iter().position(|m| m.is_match(path))
+    pub fn match_path<'a, 'b>(&'a self, path: &'b str) -> Option<&'a Matcher> {
+        self.paths.iter().find(|m| m.is_match(path))
     }
 
     pub fn get_default_bridge_buffer_size() -> usize {
@@ -71,7 +70,7 @@ impl HpsConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct Matcher {
     starts_with: String,
     server_port: u16,
@@ -89,20 +88,12 @@ impl Matcher {
         path.starts_with(&self.starts_with)
     }
 
-    pub fn match_and_get_addr(&self, path: &str) -> Option<&str> {
-        if self.is_match(path) {
-            Some(&self.server_addr)
-        } else {
-            None
-        }
-    }
-
     pub fn server_addr(&self) -> &str {
         &self.server_addr
     }
 
-    pub fn matcher(&self) -> &str {
-        &self.starts_with
+    pub async fn create_connection(&self) -> Result<TcpStream> {
+        utils::connect(&self.server_addr).await
     }
 }
 

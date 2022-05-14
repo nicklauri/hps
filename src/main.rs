@@ -1,26 +1,14 @@
-#![allow(warnings)]
-use anyhow::{anyhow, bail, Result};
-use config::HpsConfig;
-use once_cell;
-use serde::{Deserialize, Serialize};
-use serde_json;
-use std::{env, net::SocketAddr, process, sync::Arc};
-use tokio::{
-    self, fs,
-    net::{TcpListener, TcpStream},
-};
-use tracing::{error, info, warn};
+use crate::config::CONFIG;
+use anyhow::Result;
+use std::process;
+use tokio;
+use tracing::{error, info};
 use tracing_subscriber;
 
-use crate::config::exit_if_err;
-use crate::config::CONFIG;
-
 mod adapter;
-#[macro_use]
 mod config;
 mod server;
-
-mod client;
+mod utils;
 
 pub async fn run() -> Result<()> {
     if CONFIG.verbose {
@@ -39,9 +27,30 @@ pub async fn run() -> Result<()> {
     Ok(())
 }
 
+// #[path = "kernel32.dll"]
+extern "system" {
+    fn GetStdHandle(handle: i32) -> usize;
+    fn SetConsoleMode(console_handle: usize, console_mode: u32) -> i32;
+}
+
+fn setup_color() {
+    // On Windows, we have two choice to setup console to use ANSI color escape codes:
+    //      WinAPI: SetConsoleMode(GetStdHandle(-11), 7)
+    // If we use Python, simply call os.system('') or os.system('color') and it's done.
+    const STDOUT_HANDLE: i32 = -11;
+    unsafe {
+        SetConsoleMode(GetStdHandle(STDOUT_HANDLE), 7);
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+
+    if cfg!(target_os = "windows") {
+        println!("setup!");
+        setup_color();
+    }
 
     let result = ctrlc::set_handler(|| {
         info!("server is shutting down");
