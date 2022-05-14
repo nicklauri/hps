@@ -78,7 +78,7 @@ impl Adapter {
 
         let amount = self.client.read(&mut self.buf_client[buf_cursor..]).await?;
         if amount == 0 {
-            bail!("bad request: read 0 bytes (remaining bytes={})", self.remain_req_len);
+            bail!(self.remain_req_len);
         }
 
         let total_buf_size = amount + buf_cursor;
@@ -124,10 +124,7 @@ impl Adapter {
 
         self.remain_req_start = 0;
 
-        // self.forward_client_content_length(server).await?;
-
         let result = utils::copy_nbuf(&mut self.client, server, &mut self.buf_client, self.client_pending_read).await;
-
         match result {
             Ok(()) => Ok(bytes_read),
             Err(err) => {
@@ -163,14 +160,23 @@ impl Adapter {
 
             self.client.write_all(buf).await?;
 
-            pending_read = parse_result.content_length - (total_buf_size - parse_result.parsed_len);
+            // TODO: total_buf_size - parse_result.parsed_len > parse_result.content_length
+            // Buffer still has some data but the header from server? How to handle?!
+            // TODO: Websocket?
+            pending_read = parse_result
+                .content_length
+                .saturating_sub(total_buf_size - parse_result.parsed_len);
 
             break parse_result;
         };
 
         let bytes_read = pending_read + parse_result.parsed_len;
 
-        let _ = utils::copy_nbuf(server, &mut self.client, &mut self.buf_server, pending_read).await?;
+        let result = utils::copy_nbuf(server, &mut self.client, &mut self.buf_server, pending_read).await;
+
+        if let Err(None) = result.as_ref().map_err(|r| r.downcast_ref::<usize>()) {
+            return result.map(|_| 0);
+        }
 
         Ok(bytes_read)
     }

@@ -21,8 +21,13 @@ pub async fn handle_client(client: TcpStream, addr: SocketAddr) -> Result<()> {
 
 pub async fn handle_error(future: impl Future<Output = Result<()>>, _client_addr: SocketAddr) {
     if let Err(err) = future.await {
+        if let Some(0) = err.downcast_ref::<usize>() {
+            // Reached EOF;
+            return;
+        }
+
         if CONFIG.verbose {
-            warn!("error: {err:?}");
+            warn!("{err:?}");
 
             err.chain().skip(1).for_each(|e| {
                 warn!("caused by: {e}");
