@@ -48,7 +48,6 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     if cfg!(target_os = "windows") {
-        println!("setup!");
         setup_color();
     }
 
