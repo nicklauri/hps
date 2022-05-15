@@ -57,11 +57,16 @@ impl HpsConfig {
         let iter = self.paths.iter_mut();
 
         for matcher in iter {
-            let server_addr = if matcher.server_ip.is_empty() {
-                &self.server_addr
+            let mut server_addr = if matcher.server_ip.is_empty() {
+                self.server_addr.trim()
             } else {
-                &matcher.server_ip
+                matcher.server_ip.trim()
             };
+
+            // Prevent TcpStream::connect failed when server is listening on 0.0.0.0
+            if server_addr == "0.0.0.0" {
+                server_addr = "127.0.0.1";
+            }
 
             matcher.server_addr = format!("{}:{}", server_addr, matcher.server_port);
         }

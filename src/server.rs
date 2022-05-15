@@ -3,7 +3,7 @@ use crate::config::CONFIG;
 use anyhow::{Context, Result};
 use std::{future::Future, net::SocketAddr};
 use tokio::net::{TcpListener, TcpStream};
-use tracing::{info, warn};
+use tracing::warn;
 
 pub async fn create_server() -> Result<TcpListener> {
     let server_addr = format!("{}:{}", CONFIG.server_addr, CONFIG.server_port);
@@ -26,14 +26,11 @@ pub async fn handle_error(future: impl Future<Output = Result<()>>, _client_addr
             return;
         }
 
+        warn!("{err}");
         if CONFIG.verbose {
-            warn!("{err:?}");
-
             err.chain().skip(1).for_each(|e| {
                 warn!("caused by: {e}");
             });
-        } else {
-            warn!("{err}");
         }
     }
 }
@@ -68,9 +65,9 @@ pub async fn run_server(server: &mut TcpListener) -> Result<()> {
             }
         };
 
-        if CONFIG.verbose {
-            info!("got request from: {}", client_addr);
-        }
+        // if CONFIG.verbose {
+        //     info!("got request from: {}", client_addr);
+        // }
 
         let task = handle_client(client, client_addr);
 
