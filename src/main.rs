@@ -1,3 +1,4 @@
+#![allow(warnings)]
 use crate::config::CONFIG;
 use anyhow::Result;
 use std::process;
@@ -5,7 +6,6 @@ use tokio;
 use tracing::{error, info};
 use tracing_subscriber;
 
-mod adapter;
 mod config;
 mod server;
 mod utils;
@@ -15,19 +15,16 @@ pub async fn run() -> Result<()> {
         info!("hps_config = {:#?}", &*CONFIG);
     }
 
-    let mut server = server::create_server().await?;
-
     info!(
         "server started at: {}:{}. Press Ctrl-C to stop.",
         CONFIG.server_addr, CONFIG.server_port
     );
 
-    server::run_server(&mut server).await?;
+    server::run().await?;
 
     Ok(())
 }
 
-// #[path = "kernel32.dll"]
 extern "system" {
     fn GetStdHandle(handle: i32) -> usize;
     fn SetConsoleMode(console_handle: usize, console_mode: u32) -> i32;

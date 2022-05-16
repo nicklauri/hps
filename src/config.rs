@@ -1,11 +1,12 @@
 use crate::utils;
 use anyhow::{anyhow, Result};
+use hyper::Uri;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::env;
 use tokio::net::TcpStream;
-use tracing::error;
+use tracing::{error, info};
 
 pub const DEFAULT_BUFFER_SIZE: usize = 1024 * 8;
 pub const MAX_NUMBERS_OF_HEADERS: usize = 100;
@@ -73,6 +74,10 @@ impl HpsConfig {
 
         self
     }
+
+    pub fn get_uri(&self, uri: &Uri) -> Option<Uri> {
+        self.paths.iter().find_map(|p| p.match_uri(uri).ok().flatten())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -95,6 +100,22 @@ impl Matcher {
 
     pub fn server_addr(&self) -> &str {
         &self.server_addr
+    }
+
+    pub fn match_uri(&self, uri: &Uri) -> Result<Option<Uri>> {
+        if self.is_match(uri.path()) {
+            let new_uri = format!(
+                "http://{}{}",
+                self.server_addr,
+                uri.path_and_query().map(|p| p.to_string()).unwrap_or_default()
+            );
+
+            info!("matched URI from: {} => {}", uri, new_uri);
+
+            return Ok(Some(new_uri.parse()?));
+        }
+
+        Ok(None)
     }
 
     pub async fn create_connection(&self) -> Result<TcpStream> {

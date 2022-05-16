@@ -12,6 +12,11 @@
             "server_port": 5000
         },
         {
+            "starts_with": "/ip",
+            "server_ip": "icanhazip.com",
+            "server_port": 80
+        },
+        {
             "starts_with": "",
             "server_port": 15003
         }

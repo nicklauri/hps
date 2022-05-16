@@ -1,38 +1,53 @@
-use crate::adapter::Adapter;
-use crate::config::CONFIG;
 use anyhow::{Context, Result};
-use std::{future::Future, net::SocketAddr};
-use tokio::net::{TcpListener, TcpStream};
-use tracing::warn;
+use hyper::{
+    client::{HttpConnector, ResponseFuture},
+    header::{HeaderValue, HOST},
+    server::conn::AddrStream,
+    service::{make_service_fn, service_fn},
+    Body, Client, Request, Response, Server,
+};
+use std::{convert::Infallible, net::SocketAddr};
+use tracing::{error, info};
 
-pub async fn create_server() -> Result<TcpListener> {
+use crate::config::CONFIG;
+
+thread_local! {
+    static CLIENT: Client<HttpConnector> = Client::default();
+}
+
+pub async fn run() -> Result<()> {
+    let make_svc = make_service_fn(|socket: &AddrStream| {
+        let remote_addr = socket.remote_addr();
+        async move { Ok::<_, Infallible>(service_fn(service)) }
+    });
+
     let server_addr = format!("{}:{}", CONFIG.server_addr, CONFIG.server_port);
 
-    let server = TcpListener::bind(&server_addr)
-        .await
-        .with_context(|| format!("bind server failed: server_addr={}", server_addr))?;
+    let server = Server::bind(&server_addr.as_str().parse::<SocketAddr>().unwrap()).serve(make_svc);
 
-    Ok(server)
-}
-
-pub async fn handle_client(client: TcpStream, addr: SocketAddr) -> Result<()> {
-    Adapter::new(client, addr).run().await
-}
-
-pub async fn handle_error(future: impl Future<Output = Result<()>>, _client_addr: SocketAddr) {
-    if let Err(err) = future.await {
-        if let Some(0) = err.downcast_ref::<usize>() {
-            // Reached EOF;
-            return;
-        }
-
-        warn!("{err}");
-        if CONFIG.verbose {
-            err.chain().skip(1).for_each(|e| {
-                warn!("caused by: {e}");
-            });
-        }
+    if let Err(e) = server.await {
+        error!("server error: {}", e);
     }
+
+    Ok(())
+}
+
+pub async fn service(mut request: Request<Body>) -> Result<Response<Body>> {
+    // modify uri
+
+    let mut uri = request.uri_mut();
+
+    *uri = CONFIG.get_uri(&uri).context("no URI matched")?;
+
+    let host = uri.host().unwrap().to_string();
+
+    let mut headers = request.headers_mut();
+
+    headers.get_mut(HOST).map(|h| *h = host.parse::<HeaderValue>().unwrap());
+
+    info!("sending request: {:?}", request);
+
+    Ok(CLIENT.with(|c| c.request(request)).await?)
 }
 
 #[allow(dead_code)]
@@ -53,24 +68,4 @@ pub fn create_bad_request_response() -> String {
 </pre></body>
 </html>"
     )
-}
-
-pub async fn run_server(server: &mut TcpListener) -> Result<()> {
-    loop {
-        let (client, client_addr) = match server.accept().await {
-            Ok(client) => client,
-            Err(err) => {
-                warn!("{err:?}");
-                continue;
-            }
-        };
-
-        // if CONFIG.verbose {
-        //     info!("got request from: {}", client_addr);
-        // }
-
-        let task = handle_client(client, client_addr);
-
-        tokio::spawn(handle_error(task, client_addr));
-    }
 }

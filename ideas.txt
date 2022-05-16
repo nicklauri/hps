@@ -12,3 +12,9 @@ remove all "client={}" in adapter.
 use handle to format
 
 handle error with dedicated Error struct
+
+
+use hyper to parse and things
+    https://docs.rs/hyper/latest/hyper/client/index.html
+    https://docs.rs/hyper/latest/hyper/client/conn/index.html
+    https://docs.rs/hyper/latest/hyper/server/conn/index.html
