@@ -33,19 +33,19 @@ pub async fn run() -> Result<()> {
 }
 
 pub async fn service(mut request: Request<Body>) -> Result<Response<Body>> {
-    // modify uri
-
     let mut uri = request.uri_mut();
 
     *uri = CONFIG.get_uri(&uri).context("no URI matched")?;
 
-    let host = uri.host().unwrap().to_string();
+    let host = uri.host().map(HeaderValue::from_str).context("no host")??;
 
     let mut headers = request.headers_mut();
 
-    headers.get_mut(HOST).map(|h| *h = host.parse::<HeaderValue>().unwrap());
+    headers.get_mut(HOST).map(|h| *h = host);
 
-    info!("sending request: {:?}", request);
+    if CONFIG.verbose {
+        info!("sending request: {:?}", request);
+    }
 
     Ok(CLIENT.with(|c| c.request(request)).await?)
 }
