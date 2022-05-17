@@ -33,6 +33,8 @@ pub async fn run() -> Result<()> {
 }
 
 pub async fn service(mut request: Request<Body>) -> Result<Response<Body>> {
+    info!("{:<5} {}", request.method().as_str(), request.uri());
+
     let mut uri = request.uri_mut();
 
     *uri = CONFIG.get_uri(&uri).context("no URI matched")?;
@@ -44,7 +46,7 @@ pub async fn service(mut request: Request<Body>) -> Result<Response<Body>> {
     headers.get_mut(HOST).map(|h| *h = host);
 
     if CONFIG.verbose {
-        info!("sending request: {:?}", request);
+        info!("sending request: {:#?}", request);
     }
 
     Ok(CLIENT.with(|c| c.request(request)).await?)

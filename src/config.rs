@@ -110,8 +110,6 @@ impl Matcher {
                 uri.path_and_query().map(|p| p.to_string()).unwrap_or_default()
             );
 
-            info!("matched URI from: {} => {}", uri, new_uri);
-
             return Ok(Some(new_uri.parse()?));
         }
 
