@@ -1,4 +1,3 @@
-use crate::utils;
 use anyhow::{anyhow, Result};
 use hyper::Uri;
 use once_cell::sync::Lazy;
@@ -114,10 +113,6 @@ impl Matcher {
         }
 
         Ok(None)
-    }
-
-    pub async fn create_connection(&self) -> Result<TcpStream> {
-        utils::connect(&self.server_addr).await
     }
 }
 

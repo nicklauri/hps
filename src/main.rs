@@ -8,7 +8,6 @@ use tracing_subscriber;
 
 mod config;
 mod server;
-mod utils;
 
 pub async fn run() -> Result<()> {
     if CONFIG.verbose {
@@ -46,17 +45,6 @@ async fn main() {
 
     if cfg!(target_os = "windows") {
         setup_color();
-    }
-
-    let result = ctrlc::set_handler(|| {
-        info!("server is shutting down");
-
-        process::exit(0);
-    });
-
-    if let Err(err) = result {
-        error!("setup Ctrl-C failed: {}", err);
-        return;
     }
 
     if let Err(err) = run().await {

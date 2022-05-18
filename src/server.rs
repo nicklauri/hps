@@ -6,6 +6,7 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Client, Request, Response, Server,
 };
+use tokio::signal;
 use std::{convert::Infallible, net::SocketAddr};
 use tracing::{error, info};
 
@@ -23,7 +24,9 @@ pub async fn run() -> Result<()> {
 
     let server_addr = format!("{}:{}", CONFIG.server_addr, CONFIG.server_port);
 
-    let server = Server::bind(&server_addr.as_str().parse::<SocketAddr>().unwrap()).serve(make_svc);
+    let server = Server::bind(&server_addr.as_str().parse::<SocketAddr>().unwrap())
+        .serve(make_svc)
+        .with_graceful_shutdown(shutdown_signal());
 
     if let Err(e) = server.await {
         error!("server error: {}", e);
@@ -52,22 +55,8 @@ pub async fn service(mut request: Request<Body>) -> Result<Response<Body>> {
     Ok(CLIENT.with(|c| c.request(request)).await?)
 }
 
-#[allow(dead_code)]
-pub fn create_bad_request_response() -> String {
-    format!(
-        "\
-    HTTP/1.1 400 Bad Request\
-    server: hps\
-    connection: closed\
-    \n\n\
-<!DOCTYPE>
-<html>
-<head>
-    <title>Bad request</title>
-</head>
-<body><pre>
-    Bad request!
-</pre></body>
-</html>"
-    )
+pub async fn shutdown_signal() {
+    signal::ctrl_c().await.expect("install Ctrl-C signal handler");
+
+    info!("server is shutting down.");
 }
