@@ -2,17 +2,17 @@ use anyhow::{Context, Result};
 use bytesize::ByteSize;
 use hyper::{
     client::{HttpConnector, ResponseFuture},
-    header::{HeaderValue, HOST, CONTENT_LENGTH},
+    header::{HeaderValue, CONTENT_LENGTH, HOST},
     server::conn::AddrStream,
     service::{make_service_fn, service_fn},
     Body, Client, Request, Response, Server,
 };
 use once_cell::sync::Lazy;
+use std::{convert::Infallible, net::SocketAddr, time::Instant};
 use tokio::signal;
-use std::{convert::Infallible, net::SocketAddr};
 use tracing::{error, info};
 
-use crate::config::CONFIG;
+use crate::{config::CONFIG, util};
 
 static CLIENT: Lazy<Client<HttpConnector>> = Lazy::new(Client::default);
 
@@ -50,25 +50,35 @@ pub async fn service(mut request: Request<Body>) -> Result<Response<Body>> {
 
     if CONFIG.verbose {
         info!("sending request: {:#?}", request);
-    }   
+    }
 
     let method = request.method().to_string();
-    let uri = request.uri().path_and_query().map(|s| s.to_string()).unwrap_or_else(String::new);
+    let uri = request
+        .uri()
+        .path_and_query()
+        .map(|s| s.to_string())
+        .unwrap_or_else(String::new);
+    let timer = Instant::now();
 
     let response = CLIENT.request(request).await?;
 
+    let elapsed = timer.elapsed();
+
     let status = response.status();
-    let content_length = response.headers().get(CONTENT_LENGTH).
-        and_then(|v| v.to_str()
-            .ok()
-            .and_then(|s| s.parse::<u64>().ok())
-        )
+    let content_length = response
+        .headers()
+        .get(CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u64>().ok())
         .map(ByteSize);
 
     if let Some(content_length) = content_length {
-        info!("{:<5} {} -- {} - {}", method, uri, status, content_length);
+        info!(
+            "{:<7} {} -- {} - {} - after: {:?}",
+            method, uri, status, content_length, elapsed
+        );
     } else {
-        info!("{:<5} {} -- {}", method, uri, status);
+        info!("{:<7} {} -- {} - after: {:?}", method, uri, status, elapsed);
     }
 
     Ok(response)
