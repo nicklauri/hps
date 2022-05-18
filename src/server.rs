@@ -1,20 +1,20 @@
 use anyhow::{Context, Result};
+use bytesize::ByteSize;
 use hyper::{
     client::{HttpConnector, ResponseFuture},
-    header::{HeaderValue, HOST},
+    header::{HeaderValue, HOST, CONTENT_LENGTH},
     server::conn::AddrStream,
     service::{make_service_fn, service_fn},
     Body, Client, Request, Response, Server,
 };
+use once_cell::sync::Lazy;
 use tokio::signal;
 use std::{convert::Infallible, net::SocketAddr};
 use tracing::{error, info};
 
 use crate::config::CONFIG;
 
-thread_local! {
-    static CLIENT: Client<HttpConnector> = Client::default();
-}
+static CLIENT: Lazy<Client<HttpConnector>> = Lazy::new(Client::default);
 
 pub async fn run() -> Result<()> {
     let make_svc = make_service_fn(|socket: &AddrStream| {
@@ -36,7 +36,7 @@ pub async fn run() -> Result<()> {
 }
 
 pub async fn service(mut request: Request<Body>) -> Result<Response<Body>> {
-    info!("{:<5} {}", request.method().as_str(), request.uri());
+    // info!("{:<5} {}", request.method().as_str(), request.uri());
 
     let mut uri = request.uri_mut();
 
@@ -50,9 +50,28 @@ pub async fn service(mut request: Request<Body>) -> Result<Response<Body>> {
 
     if CONFIG.verbose {
         info!("sending request: {:#?}", request);
+    }   
+
+    let method = request.method().to_string();
+    let uri = request.uri().path_and_query().map(|s| s.to_string()).unwrap_or_else(String::new);
+
+    let response = CLIENT.request(request).await?;
+
+    let status = response.status();
+    let content_length = response.headers().get(CONTENT_LENGTH).
+        and_then(|v| v.to_str()
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+        )
+        .map(ByteSize);
+
+    if let Some(content_length) = content_length {
+        info!("{:<5} {} -- {} - {}", method, uri, status, content_length);
+    } else {
+        info!("{:<5} {} -- {}", method, uri, status);
     }
 
-    Ok(CLIENT.with(|c| c.request(request)).await?)
+    Ok(response)
 }
 
 pub async fn shutdown_signal() {

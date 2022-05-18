@@ -8,6 +8,7 @@ use tracing_subscriber;
 
 mod config;
 mod server;
+mod util;
 
 pub async fn run() -> Result<()> {
     if CONFIG.verbose {
