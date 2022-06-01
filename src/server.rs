@@ -19,7 +19,7 @@ static CLIENT: Lazy<Client<HttpConnector>> = Lazy::new(Client::default);
 pub async fn run() -> Result<()> {
     let make_svc = make_service_fn(|socket: &AddrStream| {
         let remote_addr = socket.remote_addr();
-        async move { Ok::<_, Infallible>(service_fn(service)) }
+        async move { Ok::<_, Infallible>(service_fn(move |req| service(req, remote_addr))) }
     });
 
     let server_addr = format!("{}:{}", CONFIG.server_addr, CONFIG.server_port);
@@ -35,9 +35,7 @@ pub async fn run() -> Result<()> {
     Ok(())
 }
 
-pub async fn service(mut request: Request<Body>) -> Result<Response<Body>> {
-    // info!("{:<5} {}", request.method().as_str(), request.uri());
-
+pub async fn service(mut request: Request<Body>, addr: SocketAddr) -> Result<Response<Body>> {
     let mut uri = request.uri_mut();
 
     *uri = CONFIG.get_uri(&uri).context("no URI matched")?;
@@ -74,11 +72,11 @@ pub async fn service(mut request: Request<Body>) -> Result<Response<Body>> {
 
     if let Some(content_length) = content_length {
         info!(
-            "{:<7} {} -- {} - {} - after: {:?}",
-            method, uri, status, content_length, elapsed
+            "{} {:>7} {} -- {} - {} - after: {:?}",
+            addr, method, uri, status, content_length, elapsed
         );
     } else {
-        info!("{:<7} {} -- {} - after: {:?}", method, uri, status, elapsed);
+        info!("{} {:>7} {} -- {} - after: {:?}", addr, method, uri, status, elapsed);
     }
 
     Ok(response)

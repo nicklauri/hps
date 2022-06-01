@@ -5,20 +5,12 @@
     "paths": [
         {
             "starts_with": "/api/v1",
-            "server_port": 8080
+            "server_addr": "http://localhost:8080"
         },
         {
-            "starts_with": "/admin",
-            "server_port": 5000
-        },
-        {
+            "is_prefix": true,
             "starts_with": "/ip",
-            "server_ip": "icanhazip.com",
-            "server_port": 80
-        },
-        {
-            "starts_with": "",
-            "server_port": 15003
+            "server_addr": "http://icanhazip.com"
         }
     ]
 }

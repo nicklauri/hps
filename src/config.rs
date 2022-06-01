@@ -42,7 +42,33 @@ impl HpsConfig {
 
         let hps_config = exit_if_err!(serde_json::from_str::<HpsConfig>(&config_file_content));
 
-        hps_config.format_server_addr()
+        let server_addr_errs = hps_config
+            .paths
+            .iter()
+            .map(|p| (p.server_addr(), str::parse::<Uri>(p.server_addr())));
+
+        let mut is_err = false;
+
+        for (addr, urires) in server_addr_errs {
+            match urires {
+                Ok(uri) => {
+                    if uri.path() != "/" {
+                        is_err = true;
+                        error!("ERR: addr={addr} server address shouldn't contain any path.");
+                    }
+                }
+                Err(err) => {
+                    is_err = true;
+                    error!("ERR: addr={}: {:?}", addr, err);
+                }
+            }
+        }
+
+        if is_err {
+            std::process::exit(1);
+        }
+
+        hps_config
     }
 
     pub fn match_path<'a, 'b>(&'a self, path: &'b str) -> Option<&'a Matcher> {
@@ -53,27 +79,6 @@ impl HpsConfig {
         DEFAULT_BUFFER_SIZE
     }
 
-    fn format_server_addr(mut self) -> Self {
-        let iter = self.paths.iter_mut();
-
-        for matcher in iter {
-            let mut server_addr = if matcher.server_ip.is_empty() {
-                self.server_addr.trim()
-            } else {
-                matcher.server_ip.trim()
-            };
-
-            // Prevent TcpStream::connect failed when server is listening on 0.0.0.0
-            if server_addr == "0.0.0.0" {
-                server_addr = "127.0.0.1";
-            }
-
-            matcher.server_addr = format!("{}:{}", server_addr, matcher.server_port);
-        }
-
-        self
-    }
-
     pub fn get_uri(&self, uri: &Uri) -> Option<Uri> {
         self.paths.iter().find_map(|p| p.match_uri(uri).ok().flatten())
     }
@@ -81,14 +86,12 @@ impl HpsConfig {
 
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct Matcher {
+    #[serde(default)]
+    is_prefix: bool,
     starts_with: String,
-    server_port: u16,
 
-    #[serde(default)]
-    server_ip: String,
-
-    // private
-    #[serde(default)]
+    // TODO: server_addr should not have any path and follow format: ^http[s]://(host:)$
+    // Will verify this later, keep it simple for now.
     server_addr: String,
 }
 
@@ -103,11 +106,11 @@ impl Matcher {
 
     pub fn match_uri(&self, uri: &Uri) -> Result<Option<Uri>> {
         if self.is_match(uri.path()) {
-            let new_uri = format!(
-                "http://{}{}",
-                self.server_addr,
-                uri.path_and_query().map(|p| p.to_string()).unwrap_or_default()
-            );
+            let path = uri.path_and_query().map(|p| p.to_string()).unwrap_or_default();
+
+            let path = path.split_at(if self.is_prefix { self.starts_with.len() } else { 0 }).1;
+
+            let new_uri = format!("{}{}", self.server_addr, path);
 
             return Ok(Some(new_uri.parse()?));
         }
